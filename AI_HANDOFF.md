@@ -68,6 +68,16 @@ on subtle clinical-coherence calls — drill against seed samples first.)
   symbols resolve. (Config load fails with `pyyaml` missing — see
   blockers below; this is the user's pip install gate, not a regression.)
 
+### Markdown mirror (separate GitHub repo)
+
+A sibling repo at `~/Documents/Medii_Markdown_Mirror/` holds a 1:1 copy
+of every `.md` file in this project, kept in sync by a `pre-push` git
+hook. So that a fresh clone gets the hook, the hook source is versioned
+at `tools/git-hooks/pre-push`; install with `bash tools/install_hooks.sh`.
+The mirror lets the operator read project markdown from a tablet
+(via the mirror's GitHub repo) without cloning the full pipeline. See
+the **Markdown Mirror** section in `CLAUDE.md` for setup details.
+
 ## [Active Blockers / What the user must grant]
 
 1. **`pip install -r requirements.txt`** in the project `.venv`. Already

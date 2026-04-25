@@ -12,7 +12,13 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 1. **Before coding:** Read `AI_HANDOFF.md` for current state and blockers. Run `git status` and `git diff` to see prior work.
 2. **Git discipline:** Commit after each logical block. Never force-add files in `.gitignore` (no PDFs, sqlite, .venv).
 3. **After coding:** Update `AI_HANDOFF.md` (brief: current state, errors, next step). Append to `CHANGELOG.md` after major components.
-4. **Logging:** Keep `AI_HANDOFF.md` extremely brief to save tokens.
+4. **Before pushing to GitHub:** the `pre-push` hook (installed via `bash tools/install_hooks.sh`) auto-syncs every `.md` file into the **separate** `Medii_Markdown_Mirror` repo at `~/Documents/Medii_Markdown_Mirror/` and pushes that mirror to its own GitHub remote. If the hook is not installed (fresh clone), run `bash tools/sync_markdown_mirror.sh` manually before `git push`. The mirror exists so notes/specs are accessible from a tablet without cloning the whole project. Failures of the mirror sync are non-blocking — the Medii push still succeeds.
+5. **Logging:** Keep `AI_HANDOFF.md` extremely brief to save tokens.
+
+## Markdown Mirror — one-time setup per machine
+1. `bash tools/install_hooks.sh` — installs the `pre-push` hook into the shared `.git/hooks/` (worktree-safe).
+2. Ensure `~/Documents/Medii_Markdown_Mirror/` exists, is a git repo, and has an `origin` remote pointing at the mirror's GitHub URL. If the directory does not exist, the hook logs a warning and skips the sync.
+3. Override the mirror destination by exporting `MEDII_MIRROR_DIR=/some/other/path` before pushing.
 
 ## Key Files
 - `src/01_ingest.py` - Multi-source ingestion (PDF→MD+images), pause/resume
@@ -20,11 +26,15 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 - `src/03_qc_audit.py` - 3-tier quality check (Code→AI→Human)
 - `src/04_image_triage.py` - Image classification via Ollama vision
 - `src/anchor_manifest.py` - Structured anchor sidecars for provenance
+- `src/oversight/` - Cloud-first cascade (cheap → cross-check → deep) via OpenRouter
+- `tools/sync_markdown_mirror.sh` - mirror sync script (called by pre-push hook)
+- `tools/install_hooks.sh` - installs git hooks from `tools/git-hooks/`
 - `corpus/` - Data lifecycle (raw→extracted→chunks)
 
 ## Tech Stack
-- Python 3.11, PyMuPDF4LLM, sentence-transformers, ChromaDB, medspacy, Ollama (Gemma 4)
-- Local-only: no cloud API calls for inference
+- Python 3.11, PyMuPDF4LLM, sentence-transformers, ChromaDB, medspacy
+- Cloud LLMs via OpenRouter (single API key drives the cascade): DeepSeek V4 Flash (executor), o4-mini (cross-check), DeepSeek V4 Pro (verifier). Anthropic + OpenAI direct as secondary fallback.
+- Local Ollama (MedGemma / Qwen) is OPTIONAL fallback only — set `MEDII_OFFLINE=1` to force it.
 
 ## Creative Leeway
 You have autonomy over engineering decisions. If you find a better pattern or library, implement it. Log reasoning in `AI_HANDOFF.md`.
