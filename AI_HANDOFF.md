@@ -68,6 +68,43 @@ on subtle clinical-coherence calls — drill against seed samples first.)
   symbols resolve. (Config load fails with `pyyaml` missing — see
   blockers below; this is the user's pip install gate, not a regression.)
 
+### ML stack (`.venv-ml`) — local GPU work on the RTX 3070
+
+The heavy ML stack lives in a **separate venv on Python 3.12** because
+the system Python is 3.14 (no torch/Docling wheels yet).
+
+  `.venv/`     Py 3.14 — cascade, drafter, bench, oversight gates
+  `.venv-ml/`  Py 3.12 — torch 2.6.0+cu124, Docling, sentence-transformers,
+                          ChromaDB, reportlab. Targets `cuda:0` only.
+
+Setup steps + verification commands are in `CLAUDE.md` under
+"ML venv setup". Key bits:
+
+- **CUDA 12.4 wheels are installed via the dedicated index URL** —
+  omitting `--index-url https://download.pytorch.org/whl/cu124` gets
+  you a CPU build silently (we hit this; it's a known pitfall).
+- **`CUDA_VISIBLE_DEVICES=0` is set in every GPU script's process env**
+  so the iGPU stays out of compute. Verified by `tools/gpu_check.py`
+  reporting "torch sees 1 device(s)".
+- **BGE-M3 runs in FP16** on the 3070 (sm_86 has native tensor cores),
+  ~2× throughput vs FP32, ~1.2 GB VRAM at load + ~2.8 GB peak during
+  encode. Override with `MEDII_EMBED_DEVICE=cpu` if extract is mid-run.
+
+Throughput baseline (2026-04-25, BMJ corpus, FP16 BGE-M3):
+  2,678 chunks / 11.64 s = **230 chunks/sec** on the 3070.
+  Whole-corpus embed estimated < 30 min.
+
+Docling smoke test (Granite-Docling-258M auto-downloaded):
+  test PDF (1 page, 2x2 table, 2 paragraphs) → 2.7s warm, 0.6 GB VRAM,
+  table preserved as proper Markdown (PyMuPDF4LLM flattens tables).
+
+Tools added:
+- `tools/gpu_check.py`     — wraps any command, snapshots nvidia-smi
+                              before + after, forces CUDA_VISIBLE_DEVICES=0,
+                              warns if multiple CUDA devices appear.
+- `tools/bench_embed.py`   — 230 chunks/sec sanity bench, run via gpu_check.
+- `src/01b_docling_extract.py` — Docling extractor, CUDA-pinned.
+
 ### Markdown mirror (separate GitHub repo)
 
 A sibling repo at `~/Documents/Medii_Markdown_Mirror/` holds a 1:1 copy

@@ -32,9 +32,45 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 - `corpus/` - Data lifecycle (raw→extracted→chunks)
 
 ## Tech Stack
-- Python 3.11, PyMuPDF4LLM, sentence-transformers, ChromaDB, medspacy
+- Python 3.12 for the heavy ML stack, Python 3.14 for the lightweight cascade scripts (see "Dual venv" below).
+- PDF→Markdown: PyMuPDF4LLM (fast, text-only) **or** Docling + Granite-Docling-258M (preserves tables/math/layout — used for image- and table-heavy sources).
+- Embeddings: BGE-M3 via sentence-transformers, pinned to `cuda:0` (RTX 3070).
+- Vector store: ChromaDB (local, persistent).
 - Cloud LLMs via OpenRouter (single API key drives the cascade): DeepSeek V4 Flash (executor), o4-mini (cross-check), DeepSeek V4 Pro (verifier). Anthropic + OpenAI direct as secondary fallback.
 - Local Ollama (MedGemma / Qwen) is OPTIONAL fallback only — set `MEDII_OFFLINE=1` to force it.
+
+## Dual venv — important
+This project uses **two separate virtual environments** because the heavy ML stack (torch + Docling + sentence-transformers) doesn't have wheels for Python 3.14 yet.
+
+| venv | Python | Purpose | Scripts |
+|---|---|---|---|
+| `.venv/` | 3.14 | Cascade, drafter, bench, oversight gates | `src/05_case_drafter.py`, `src/oversight/*`, `oversight.bench`, `oversight.gates` |
+| `.venv-ml/` | 3.12 | GPU-bound stages | `src/01b_docling_extract.py`, `src/02_embed.py`, `src/04_image_triage.py` (vision) |
+
+**ML venv setup** (one-time per machine):
+```bash
+# 1. Bootstrap uv (already in .venv via pip install uv)
+.venv/Scripts/python.exe -m uv python install 3.12
+.venv/Scripts/python.exe -m uv venv .venv-ml --python 3.12
+
+# 2. Bootstrap pip into .venv-ml
+.venv-ml/Scripts/python.exe -m ensurepip --upgrade
+.venv-ml/Scripts/python.exe -m pip install --upgrade pip
+
+# 3. Install CUDA-enabled torch FIRST (the dedicated index is critical;
+#    omitting it gets you a CPU build silently).
+.venv-ml/Scripts/python.exe -m pip install \
+    --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+
+# 4. Then the rest from requirements-ml.txt
+.venv-ml/Scripts/python.exe -m pip install -r requirements-ml.txt
+
+# 5. Verify the 3070 (not the iGPU) is detected.
+.venv-ml/Scripts/python.exe -c "import torch; print(torch.cuda.get_device_name(0))"
+# expected: NVIDIA GeForce RTX 3070
+```
+
+**Per ARCHITECTURE.md, the GPU cannot run concurrent neural workloads on 8 GB VRAM.** Run extract → embed → triage sequentially, never in parallel.
 
 ## Creative Leeway
 You have autonomy over engineering decisions. If you find a better pattern or library, implement it. Log reasoning in `AI_HANDOFF.md`.
