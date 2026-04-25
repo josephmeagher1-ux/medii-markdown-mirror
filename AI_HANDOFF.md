@@ -68,6 +68,23 @@ on subtle clinical-coherence calls — drill against seed samples first.)
   symbols resolve. (Config load fails with `pyyaml` missing — see
   blockers below; this is the user's pip install gate, not a regression.)
 
+### Wiki layer proposal — Karpathy LLM-Wiki pattern
+
+Design proposal at `plans/wiki_layer.md` (2026-04-25): adopt Andrej
+Karpathy's "LLM Wiki" pattern as a layer between extracted markdown
+and the case drafter. Concept-organised pages (`corpus/wiki/`) get
+compounded across sources at ingest time, with strict per-claim
+provenance footnotes and a contradictions queue for source disagreements.
+
+8 pitfalls catalogued in the plan with mitigations — the four that
+matter most for medical content: hallucination drift, contradiction
+overload, provenance loss on summarisation, schema lock-in.
+
+**Recommendation in the plan:** prototype on STEMI only first
+(~$0.50, one weekend). Don't roll out wiki-wide until the prototype
+proves the case drafter produces better output from a wiki page than
+from raw extracted markdown.
+
 ### ML stack (`.venv-ml`) — local GPU work on the RTX 3070
 
 The heavy ML stack lives in a **separate venv on Python 3.12** because
