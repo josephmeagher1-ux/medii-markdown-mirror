@@ -49,6 +49,58 @@ Unlike `AI_HANDOFF.md` (which only stores the *current* state to save context wi
 *   **Router Cascade with Graceful Degrade:** `router.judge_text` / `router.judge_vision` now prefer OpenRouter when `$OPENROUTER_API_KEY` is set, fall through to Anthropic Haiku/Opus + OpenAI mini direct SDKs if those keys are present, then to offline Ollama as last resort. Vision routing tries the configured cascade model first (Kimi K2.6 + DeepSeek V4 Pro are both multimodal), falls back to Anthropic vision if OpenRouter errors.
 *   **Anthropic + OpenAI Direct Path Retained:** Kept as secondary fallback for OpenRouter outages. Pricing entries for Haiku 4.5 / Sonnet 4.6 / Opus 4.7 / gpt-5-mini stay in `config.yaml`.
 
+## Multi-Model Bake-Off (2026-04-25)
+*   **Harness Built (`src/oversight/bench.py`):** Runs the same QC + ingest seed prompts against every candidate model in `bench.candidates`. Hand-curated `GROUND_TRUTH` entries for both task types. Outputs comparison table with accuracy, agreement-with-reference, latency, and cost; raw results to `db/bench_results.jsonl`.
+*   **Finding 1 — `openai/o4-mini` is the most reliable JSON producer.** Never returned None on either prompt set, scored 100% on the simple short prompts. Promoted to the `bulk_auditor` cross-check tier.
+*   **Finding 2 — Kimi K2.6 / GLM-5.1 had occasional JSON parse failures** (75% / 33% raw accuracy on QC prompts), driven by *format* failures, not wrong-answer failures. Both can answer correctly but occasionally wrap the JSON in prose that breaks `_extract_json`.
+*   **Finding 3 — `deepseek-v4-flash` is the right cost-vs-capability default for `cheap_judge`.** 4× cheaper than Kimi K2.6 with similar bulk-judge quality on the short prompts. Swapped into `router.cheap_judge.model` in `config.yaml`. Failure mode on long deeply-nested editor prompts is a known risk (later confirmed in the wiki STEMI prototype).
+*   **Hardening:** Swapped console output to ASCII markers (`OK` / `??` / `X`) + `PYTHONIOENCODING=utf-8` after Windows console choked on Unicode `✓`/`✗`. Set `PYTHONUNBUFFERED=1` to prevent empty bench output in monitor.
+
+## Stage 4 — Case Drafter (2026-04-25)
+*   **`src/05_case_drafter.py` Built:** Planner-drafter-verifier cascade producing `corpus/cases/<slug>.case.md` + `<slug>.meta.json` sidecar with provenance (plan, verifier_v1/v2, cost, elapsed). PLANNER (deep, with `bulk_alt → cheap` fallback chain) → DRAFTER (cheap, JSON-wrapped via `{"markdown": "..."}` to satisfy executor's response_format constraint) → VERIFIER (bulk_alt) → human review queue.
+*   **OCR-Noise Stripping:** `extract_section()` removes `**----- Start of picture text -----**<br>` blocks and `![](...)` image refs before passing to the cascade — those artifacts pollute drafter output and tokens.
+*   **3-Tier Planner Fallback:** Hit DeepSeek V4 Pro 429 rate limits (Together upstream). Solution:
+    ```python
+    for tier_attempt in ("deep", "bulk_alt", "cheap"):
+        plan = judge_text(plan_prompt, ..., tier=tier_attempt, ...)
+        if plan is not None: break
+    ```
+    Pipeline survives single-vendor rate limits cleanly.
+*   **End-to-End Verified on STEMI:** ~$0.014/case, ~30s elapsed.
+
+## Markdown Mirror Infrastructure (2026-04-25)
+*   **Sibling Repo at `~/Documents/Medii_Markdown_Mirror/`** holds a 1:1 copy of every `.md` file in this project. Pushed to its own GitHub remote; the operator reads from there on a tablet without cloning the full pipeline.
+*   **`tools/sync_markdown_mirror.sh` + Pre-Push Hook:** Mirrors `git ls-files '*.md'` (respects `.gitignore`), prunes deletions, commits with per-call env-var identity (no global git config touched). Fail-soft: hook never blocks the Medii push.
+*   **Versioned Hook Source (`tools/git-hooks/pre-push`):** Worktree-safe installer (`tools/install_hooks.sh`) writes into the shared `.git/hooks/` via `git rev-parse --git-common-dir`.
+*   **POST-MORTEM: Bogus Commit `4b7ef78`.** First version of the script left `GIT_DIR` / `GIT_WORK_TREE` set when the hook fired. `cd "$MIRROR_DIR"` succeeded but `git add -A` still pointed at the Medii repo via the env vars → 1548 deletions in one commit. **Fix:** `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR` + post-cd verification that `git rev-parse --show-toplevel` resolves to the mirror dir, else abort. Recovery: surgical revert in `2c4484d` (no force-push needed). Future agents: never assume git env-vars are clean inside a hook.
+
+## Local ML Stack on RTX 3070 (2026-04-25)
+*   **Dual-Venv Split.** `.venv-ml/` (Python 3.12) for torch + Docling + sentence-transformers + ChromaDB + reportlab; `.venv/` (Python 3.14) for cascade and drafter scripts. Python 3.14 has no torch wheels yet, hence the split. Setup commands documented in `CLAUDE.md` → "Dual venv".
+*   **CUDA Wheel Pitfall.** `uv pip install --extra-index-url ...pytorch.org/whl/cu124` silently picked CPU torch from PyPI as "newer" than the CUDA wheel. Switched to plain `pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision` (no extra index) to force CUDA. Documented in CLAUDE.md.
+*   **`tools/gpu_check.py`** wraps any command, snapshots `nvidia-smi` before+after, force-sets `CUDA_VISIBLE_DEVICES=0` so the iGPU stays out of compute. Warns if multiple CUDA devices appear. Normpaths the executable for Windows compat (subprocess.run WinError 2 on forward-slash relative paths).
+*   **`src/01b_docling_extract.py`** — Docling extractor pinned to `cuda:0` via `AcceleratorOptions(num_threads=4, device=AcceleratorDevice.CUDA)`. Granite-Docling-258M auto-downloads. Test PDF (1 page, 2x2 table, 2 paragraphs) → 2.7s warm, 0.6 GB VRAM, table preserved as proper Markdown (PyMuPDF4LLM flattens tables).
+*   **`src/02_embed.py`** — pin device + FP16 (`model.half()` on Ampere sm_86 for ~2× throughput vs FP32). Override with `MEDII_EMBED_DEVICE=cpu` if extract is mid-run. Throughput baseline: **230 chunks/sec** on the 3070, 2,678 chunks in 11.64s on the BMJ corpus. Whole-corpus embed estimated <30 min.
+*   **`tools/bench_embed.py`** — 5-file BMJ corpus throughput sanity bench. Reports chunks/sec + VRAM peak + similarity histogram.
+
+## Wiki Layer Infrastructure — Steps 1-2 of Integrated Plan (2026-04-25/26)
+*   **Plan Adopted (`plans/wiki_layer_integrated.md`).** Operator-approved cross-disciplinary wiki layer with subtype-aware case generation. Sub-corpora for clinical / history / biomechanics / art / nature; subtype variants as first-class structure (e.g. `stemi.variants.posterior` with own ECG examples + sources); cross-links pulling non-clinical content into `optionalExtensions[]` per master plan. 15 pitfalls catalogued with mitigations.
+*   **Step 1 — Bootstrap Data (`c7743cd`):** `corpus/wiki/_taxonomy.yaml` seeded with 5 clinical concepts + variant IDs (`stemi: [anterior, inferior, lateral, posterior, rv]`); `corpus/wiki/_style/{clinical,history,biomechanics,art,nature}.md` per-sub-corpus voice guides; `corpus/wiki/_schema_version.txt` at v1; sub-corpus dir skeletons. Cross-disciplinary subdirs (`history`, `biomechanics`, `art`, `nature`) open for operator-curated additions.
+*   **Step 2 — Pipeline Code (`1dc347c`):**
+    *   `src/wiki/schemas.py` — Pydantic `WikiPage`, `WikiPageFrontmatter`, `WikiVariant`, `WikiPageEdit`, `WikiEditPlan`, `WikiContradictionFinding`, `WikiCrossLinkProposal` + `parse_page_markdown()` / `page_to_markdown()` round-trip helpers.
+    *   `src/wiki/ingest.py` — 5-step pipeline (PLANNER deep → EDITOR cheap → CONTRADICTION CHECK bulk_alt → AUDIT deterministic → COMMIT). Routes through `oversight.router.judge_text` per the cascade. Reuses anchor manifests for `[N]` footnote provenance.
+    *   `src/wiki/audit.py` — deterministic per-claim provenance walker. Findings: `MISSING_FOOTNOTE`, `DANGLING_FOOTNOTE`, `UNDECLARED_SOURCE_ID`, `VARIANT_UNDERCITED`, `SCHEMA_VIOLATION`.
+    *   `src/wiki/migrate.py` — schema-version migration scaffold (no migrations registered yet; schema at v1).
+    *   `src/oversight/schemas.py` — added `WikiPlanVerdict`, `WikiEditVerdict`, `WikiContradictionVerdict`.
+    *   `src/oversight/config.yaml` — `stages.wiki_ingest` + `stages.wiki_audit` blocks; remediation map for new finding codes.
+*   **Step 3 — STEMI Prototype: ATTEMPTED, FAILED.** First end-to-end ingest run on `BMJ_ST-elevation*.md` crashed at the EDITOR step. Cascade returned `None` — `_extract_json` failed silently on V4-Flash output for the long deeply-nested editor prompt. Same failure mode the bake-off identified for V4-Flash on hard prompts. Cost: $0.0015 (one cascade call). **Decision gate not yet crossed** — wiki layer is infrastructure-only until the editor succeeds and a STEMI page lands for side-by-side comparison.
+*   **PR #3 Open** on `claude/wiki-layer` branch. Honest scope: infrastructure complete; STEMI prototype attempted but blocked on V4-Flash JSON parse failure; diagnosis is the next session's first job. Three remediation options recorded in `AI_HANDOFF.md`.
+
+## Markdown Harmonisation (2026-04-26)
+*   **Stale Agent-Rule Docs Found + Fixed.** Six files (AGENTS.md, GEMINI.md, .cursorrules, .clinerules, .windsurfrules, .github/copilot-instructions.md) all still said "local LLM only via Ollama, no cloud calls" — the opposite of where the project went on 2026-04-25. Slimmed each to a thin pointer at `CLAUDE.md` (the canonical source). Five sources of rule drift killed in one pass.
+*   **`ARCHITECTURE.md` Refreshed.** Old version listed only 3 src/ files (out of 7) and 0 of the new top-level dirs (`src/oversight/`, `src/wiki/`, `corpus/wiki/`, `corpus/cases/`, `tools/`, `.venv-ml/`). New version covers the full current tree + dual-venv constraints + cloud cascade.
+*   **`AI_HANDOFF.md` Re-aligned with Reality.** Cascade tier IDs now match `config.yaml` (cheap_judge is `deepseek-v4-flash`, not Kimi). "Next Immediate Step" rewritten to reflect actual current state (bake-off + drafter + mirror + ML stack + wiki infrastructure done; STEMI editor failure + 3 remediation options as the live blocker).
+*   **`plans/wiki_layer_integrated.md` Checked In.** Was previously only at `~/.claude/plans/okay-so-what-i-graceful-honey.md` (outside the repo, inaccessible to a fresh clone). Now versioned alongside the original `plans/wiki_layer.md` (marked SUPERSEDED) and `plans/oversight_harness.md` (marked IMPLEMENTED + superseded by cloud cascade).
+
 ## Cloud-First Cascade Pivot (2026-04-25)
 *   **Hardware Reality Acknowledged:** RTX 3070 (8GB VRAM) is not capable of running judge-grade LLMs reliably. Local Ollama judges demoted to OPTIONAL fallback (`MEDII_OFFLINE=1` drill mode). Embeddings (BGE-M3) remain local — they fit in VRAM cleanly when the GPU isn't shared with another model.
 *   **Planner-Executor-Verifier Cascade Adopted:** New `src/oversight/router.py` documents and implements the pattern. Initial wiring used Anthropic Haiku/Opus + OpenAI gpt-5-mini; superseded later the same day by the OpenRouter swap (above) once the operator confirmed the OpenRouter-anchored model picks. Pattern is a direct application of the 2026 LLM-routing literature (RouteLLM-style cascade): ~95% of frontier-quality judgement at a small fraction of frontier cost.

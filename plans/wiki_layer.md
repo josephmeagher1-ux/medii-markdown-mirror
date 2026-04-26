@@ -1,8 +1,23 @@
 # Wiki Layer — adopting Karpathy's "LLM Wiki" pattern for Medii
 
-> **Status:** design proposal, not yet implemented.
-> **Author:** Claude Opus 4.7 (oversight from operator).
-> **Date:** 2026-04-25.
+> **STATUS: SUPERSEDED on 2026-04-26 by `plans/wiki_layer_integrated.md`.**
+> The integrated plan extends this proposal with cross-disciplinary
+> sub-corpora (history / biomechanics / art / nature), subtype-aware
+> variants (`stemi.variants.posterior`), and an extra 7 pitfalls beyond
+> the 8 below. **Read the integrated plan first.** The body of this
+> file is preserved as the cleanest write-up of the original 8 base
+> pitfalls — most still apply.
+>
+> **Implementation status (as of 2026-04-26):**
+> - Steps 1-2 of the integrated plan landed in `claude/wiki-layer` (PR #3):
+>   `corpus/wiki/_taxonomy.yaml`, `_style/`, `src/wiki/{schemas,ingest,audit,migrate}.py`.
+> - Step 3 (STEMI prototype) attempted; editor returned None (V4-Flash
+>   JSON parse failure on the long nested editor prompt). Diagnosis +
+>   rerun is the immediate next job — see `AI_HANDOFF.md`.
+>
+> **Original metadata:**
+> - Author: Claude Opus 4.7 (oversight from operator).
+> - Date: 2026-04-25.
 
 ## Why this matters for Medii specifically
 

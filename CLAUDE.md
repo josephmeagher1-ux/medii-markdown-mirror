@@ -11,7 +11,7 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 ## Mandatory Workflow
 1. **Before coding:** Read `AI_HANDOFF.md` for current state and blockers. Run `git status` and `git diff` to see prior work.
 2. **Git discipline:** Commit after each logical block. Never force-add files in `.gitignore` (no PDFs, sqlite, .venv).
-3. **After coding:** Update `AI_HANDOFF.md` (brief: current state, errors, next step). Append to `CHANGELOG.md` after major components.
+3. **After coding:** Update `AI_HANDOFF.md` (brief: current state, errors, next step). **Append to `CHANGELOG.md` after every major component** — the human reads CHANGELOG to see the project's evolution; AI_HANDOFF is for the next AI's context window. If CHANGELOG drifts, the human loses the trail.
 4. **Before pushing to GitHub:** the `pre-push` hook (installed via `bash tools/install_hooks.sh`) auto-syncs every `.md` file into the **separate** `Medii_Markdown_Mirror` repo at `~/Documents/Medii_Markdown_Mirror/` and pushes that mirror to its own GitHub remote. If the hook is not installed (fresh clone), run `bash tools/sync_markdown_mirror.sh` manually before `git push`. The mirror exists so notes/specs are accessible from a tablet without cloning the whole project. Failures of the mirror sync are non-blocking — the Medii push still succeeds.
 5. **Logging:** Keep `AI_HANDOFF.md` extremely brief to save tokens.
 
@@ -29,7 +29,7 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 - `src/05_case_drafter.py` - Stage 4: planner/drafter/verifier cascade → MD case
 - `src/anchor_manifest.py` - Structured anchor sidecars for provenance
 - `src/oversight/` - Cloud-first cascade (cheap → cross-check → deep) via OpenRouter
-- `src/wiki/` - Karpathy-style compounding wiki layer (schemas, ingest, audit, migrate). See `~/.claude/plans/okay-so-what-i-graceful-honey.md` for the full design.
+- `src/wiki/` - Karpathy-style compounding wiki layer (schemas, ingest, audit, migrate). Canonical design at `plans/wiki_layer_integrated.md` (cross-disciplinary sub-corpora + subtype-aware variants); `plans/wiki_layer.md` is the original 8-pitfall proposal (superseded). `plans/oversight_harness.md` is the implemented-then-superseded original cascade design.
 - `corpus/wiki/` - Concept-organised wiki pages with sub-corpora (clinical, history, biomechanics, art, nature). Taxonomy at `corpus/wiki/_taxonomy.yaml`; per-sub-corpus voice guides at `corpus/wiki/_style/`.
 - `tools/sync_markdown_mirror.sh` - mirror sync script (called by pre-push hook)
 - `tools/install_hooks.sh` - installs git hooks from `tools/git-hooks/`

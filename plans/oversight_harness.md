@@ -1,5 +1,18 @@
 # Medii — Cross-Cutting Frontier Oversight Harness
 
+> **STATUS: IMPLEMENTED on 2026-04-15.**
+> **Architecture pivoted on 2026-04-25** from Anthropic + OpenAI direct
+> SDKs to a cloud-first OpenRouter cascade (single API key, three
+> independent providers across cheap → cross-check → deep tiers). Local
+> Ollama is now an OPTIONAL fallback (`MEDII_OFFLINE=1`) rather than the
+> primary judge. See `CHANGELOG.md` → "OpenRouter Cascade Wired" and
+> "Cloud-First Cascade Pivot" for the current architecture.
+>
+> The body of this file is preserved as the original design for context.
+> **Most of the verbatim model IDs and "files to add" plan are stale** —
+> read `src/oversight/router.py`, `src/oversight/frontier.py`, and
+> `src/oversight/config.yaml` for the current cascade implementation.
+
 ## Context
 
 Medii currently has four local stages (`01_ingest` → `02_embed` → `03_qc_audit` → `04_image_triage`) plus anchor manifests. Quality is only checked *at the end* by `03_qc_audit.py`, and even that uses a single local judge (Gemma 4 via Ollama). The master PWA plan (`medical_learning_pwa_1c60f761.plan.md`) already calls for staged gates, sample-based frontier audits, a Stage 4.5 independent critic, and case authoring on top of this pipeline — but none of that oversight exists yet, and `02_embed.py` doesn't even produce vector embeddings.

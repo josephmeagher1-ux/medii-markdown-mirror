@@ -1,35 +1,26 @@
-# Medii - Cross-Tool Agent Instructions
+# Medii — Cross-Tool Agent Instructions
 
-> This file is read by Antigravity, Cursor, Claude Code, and other AGENTS.md-compatible tools.
+> **This file used to duplicate (and disagreed with) the rules in CLAUDE.md.**
+> **It is now a thin pointer. The canonical source is `CLAUDE.md`.**
 
-## Project Overview
-Medii is an offline medical data ingestion pipeline for a Medical Learning PWA. It processes PDFs, web scrapes, and audio into chunked, embedded, quality-checked Markdown with structured provenance anchors.
+## Read first
 
-## Mandatory Rules for All Agents
+1. **`CLAUDE.md`** — current rules, dual-venv setup, key files, tech stack.
+2. **`AI_HANDOFF.md`** — current state, active blockers, next step.
+3. **`ARCHITECTURE.md`** — directory layout, hardware constraints.
+4. **`plans/wiki_layer_integrated.md`** — canonical wiki layer design.
+5. **`CHANGELOG.md`** — persistent project history.
 
-### Clinical Safety
-- Clinical accuracy is the top priority. Never hallucinate medical data or destroy table formatting.
-- When uncertain about medical content structure, preserve the original formatting.
+## Key invariants (non-negotiable)
 
-### Hardware Constraints
-- Target machine: RTX 3070 with 8GB VRAM.
-- Never schedule concurrent GPU-heavy operations (layout parsing + embedding).
-- Prefer streaming/batched processing over loading full datasets into memory.
+- Clinical accuracy is #1. Never hallucinate medical content or flatten tables.
+- RTX 3070 (8 GB VRAM) is reserved for ML work via `CUDA_VISIBLE_DEVICES=0`. The iGPU drives the display. Run extract → embed → triage **sequentially**.
+- **Dual venv:** `.venv/` (Py 3.14) for cascade + drafter; `.venv-ml/` (Py 3.12) for torch + Docling + ChromaDB. See `CLAUDE.md`.
+- **Cloud-first cascade** through OpenRouter (`OPENROUTER_API_KEY`). Local Ollama is OPTIONAL fallback (`MEDII_OFFLINE=1`).
+- Read `AI_HANDOFF.md` before coding. Update it before concluding if you made structural changes. Append to `CHANGELOG.md` after major components.
+- Commit after each logical block. Never force-add gitignored files (PDFs, sqlite, `.venv*`, images).
+- Markdown mirror: `bash tools/install_hooks.sh` once per machine; the pre-push hook auto-syncs `.md` files to `~/Documents/Medii_Markdown_Mirror/`.
 
-### Workflow
-1. **Start of session:** Read `AI_HANDOFF.md` for current state. Run `git status` and `git diff`.
-2. **During work:** Follow `ARCHITECTURE.md` for folder structure. Do not invent new top-level directories.
-3. **End of session:** Update `AI_HANDOFF.md` (keep brief). Append to `CHANGELOG.md` after major components.
+## Creative leeway
 
-### Git Discipline
-- Commit after each logical block of work.
-- Never commit files matched by `.gitignore` (PDFs, sqlite, .venv, images).
-- If something breaks, `git restore` to a working state and log what failed in `AI_HANDOFF.md`.
-
-### Tech Stack
-- Python 3.11, PyMuPDF4LLM, sentence-transformers, ChromaDB, medspacy
-- Local LLM: Ollama with Gemma 4 (no cloud API calls for inference)
-- Anchor sidecars: `*.anchors.json` beside each `*.md` for provenance
-
-### Creative Leeway
-Engineering autonomy is encouraged. Better patterns, libraries, or approaches are welcome as long as you log your reasoning in `AI_HANDOFF.md`.
+You have autonomy over engineering decisions. Better libraries, patterns, or approaches are welcome — log reasoning in `AI_HANDOFF.md`.
