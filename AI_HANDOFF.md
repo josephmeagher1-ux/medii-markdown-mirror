@@ -68,6 +68,51 @@ on subtle clinical-coherence calls — drill against seed samples first.)
   symbols resolve. (Config load fails with `pyyaml` missing — see
   blockers below; this is the user's pip install gate, not a regression.)
 
+### Wiki layer infrastructure (steps 1-2 of the approved plan)
+
+Branch `claude/wiki-layer` builds the foundation for the cross-disciplinary
+wiki layer per `~/.claude/plans/okay-so-what-i-graceful-honey.md`.
+
+**Landed in this branch:**
+- `corpus/wiki/_taxonomy.yaml` — 5 clinical concepts seeded with allowed
+  variant IDs per concept (`stemi: [anterior, inferior, lateral, posterior, rv]`).
+  Cross-disciplinary sub-corpora (`history`, `biomechanics`, `art`, `nature`)
+  open for operator-curated additions.
+- `corpus/wiki/_style/{clinical,history,biomechanics,art,nature}.md` —
+  per-sub-corpus voice + section-order rules. Cross-disciplinary pages
+  may NEVER be quoted as primary management evidence.
+- `src/wiki/` package: `schemas.py` (Pydantic models), `ingest.py`
+  (5-step PLANNER → EDITOR → CONTRADICTION → AUDIT → COMMIT cascade),
+  `audit.py` (deterministic per-claim provenance walker), `migrate.py`.
+- `src/oversight/{schemas.py,config.yaml}` — `WikiPlanVerdict` /
+  `WikiEditVerdict` / `WikiContradictionVerdict` shapes + new
+  `stages.wiki_ingest` + `stages.wiki_audit` config blocks +
+  remediation map for new finding codes.
+
+**STEMI prototype run — FAILED.** First end-to-end ingest attempt
+(`python -m wiki.ingest --source BMJ_ST-elevation*.md --concept stemi`)
+crashed at the EDITOR step: cascade returned `None`, almost certainly
+a JSON-parse failure on V4-Flash for the long, deeply-nested editor
+prompt. Same JSON-format failure mode we saw with Kimi/GLM in the
+earlier bake-off — V4-Flash scored 100% on the *short* QC/ingest
+prompts but the editor prompt is several KB and asks for nested JSON
+with multiple variant blocks. Cost so far: $0.0015 (one cascade call).
+
+**Three remediation options for the next session, in priority order:**
+1. Add raw-response logging to `oversight.frontier.openrouter_chat`
+   when `_extract_json` returns None, so we can see what V4-Flash
+   actually emitted (currently silently discarded).
+2. Switch the editor tier from `cheap` to `bulk_alt` (`openai/o4-mini`
+   was the most reliable on JSON in the bake-off — never returned None).
+3. Split the editor prompt into per-section calls (one section = one
+   small JSON output) instead of one big nested JSON. Trades cost for
+   reliability.
+
+**Decision gate (per the plan) is NOT yet crossed** — the prototype
+has not produced a wiki page to compare against the raw extracted
+markdown. Until it does, the wiki layer is infrastructure-only;
+`05_case_drafter.py` continues to read raw extracted markdown.
+
 ### Wiki layer proposal — Karpathy LLM-Wiki pattern
 
 Design proposal at `plans/wiki_layer.md` (2026-04-25): adopt Andrej
@@ -80,10 +125,9 @@ provenance footnotes and a contradictions queue for source disagreements.
 matter most for medical content: hallucination drift, contradiction
 overload, provenance loss on summarisation, schema lock-in.
 
-**Recommendation in the plan:** prototype on STEMI only first
-(~$0.50, one weekend). Don't roll out wiki-wide until the prototype
-proves the case drafter produces better output from a wiki page than
-from raw extracted markdown.
+The full integrated plan with cross-disciplinary sub-corpora and
+subtype-aware variants is at
+`~/.claude/plans/okay-so-what-i-graceful-honey.md` (operator-approved).
 
 ### ML stack (`.venv-ml`) — local GPU work on the RTX 3070
 

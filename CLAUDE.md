@@ -21,15 +21,21 @@ Offline medical data ingestion pipeline for building a Medical Learning PWA. Con
 3. Override the mirror destination by exporting `MEDII_MIRROR_DIR=/some/other/path` before pushing.
 
 ## Key Files
-- `src/01_ingest.py` - Multi-source ingestion (PDF→MD+images), pause/resume
-- `src/02_embed.py` - Chunking + embeddings pipeline
+- `src/01_ingest.py` - Multi-source ingestion (PDF→MD+images), pause/resume (PyMuPDF4LLM path)
+- `src/01b_docling_extract.py` - Docling extractor on RTX 3070 (preserves tables/math)
+- `src/02_embed.py` - Chunking + embeddings (BGE-M3 FP16 on cuda:0)
 - `src/03_qc_audit.py` - 3-tier quality check (Code→AI→Human)
 - `src/04_image_triage.py` - Image classification via Ollama vision
+- `src/05_case_drafter.py` - Stage 4: planner/drafter/verifier cascade → MD case
 - `src/anchor_manifest.py` - Structured anchor sidecars for provenance
 - `src/oversight/` - Cloud-first cascade (cheap → cross-check → deep) via OpenRouter
+- `src/wiki/` - Karpathy-style compounding wiki layer (schemas, ingest, audit, migrate). See `~/.claude/plans/okay-so-what-i-graceful-honey.md` for the full design.
+- `corpus/wiki/` - Concept-organised wiki pages with sub-corpora (clinical, history, biomechanics, art, nature). Taxonomy at `corpus/wiki/_taxonomy.yaml`; per-sub-corpus voice guides at `corpus/wiki/_style/`.
 - `tools/sync_markdown_mirror.sh` - mirror sync script (called by pre-push hook)
 - `tools/install_hooks.sh` - installs git hooks from `tools/git-hooks/`
-- `corpus/` - Data lifecycle (raw→extracted→chunks)
+- `tools/gpu_check.py` - wraps any command, snapshots nvidia-smi, pins CUDA_VISIBLE_DEVICES=0
+- `tools/bench_embed.py` - BGE-M3 throughput sanity bench
+- `corpus/` - Data lifecycle (raw→extracted→chunks→wiki→cases)
 
 ## Tech Stack
 - Python 3.12 for the heavy ML stack, Python 3.14 for the lightweight cascade scripts (see "Dual venv" below).
