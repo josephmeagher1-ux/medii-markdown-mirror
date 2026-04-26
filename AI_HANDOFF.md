@@ -98,6 +98,36 @@ having run on the worktree.**
    gate self-skips until backfilled with real chunk IDs from a first
    end-to-end embed run.
 
+## [Active Research Mandate — 2026-04-26]
+
+Operator asked for an in-depth survey of **alternatives at every pipeline
+stage** before committing further to the current design. The deliverable
+is `plans/architecture_options.md` (PR #5 on `claude/architecture-research`).
+
+Coverage requested:
+- PDF→Markdown extraction alternatives (PyMuPDF4LLM / Docling / Marker /
+  MinerU / Mistral OCR / Nougat / Unstructured) and which best preserves
+  medical tables/ECGs.
+- Knowledge structure alternatives (Karpathy LLM Wiki / hierarchical RAG
+  / GraphRAG / KAG / knowledge graphs / hybrid) — does the wiki layer
+  earn its keep vs a stronger RAG?
+- April-2026 cloud LLM landscape — cheapest reliable models per cascade
+  tier; medical-specialised options (Med-PaLM, Meditron, etc).
+- Role of the RTX 3070 8GB local stack — beyond embeddings, what (if
+  anything) should run locally? MedGemma / Qwen 2.5 / Phi-4 / Gemma 3.
+- Embedding alternatives (BGE-M3 vs Stella / Qwen3-Embed / NV-Embed /
+  E5-Mistral / mxbai).
+- Vector store alternatives (ChromaDB vs Qdrant / LanceDB / pgvector).
+- Cascade orchestration (custom Python vs DSPy / Instructor / LiteLLM /
+  RouteLLM).
+- Medical-specific tooling (MedCAT / scispaCy / SNOMED-CT integration).
+- Image-rights sources for cross-disciplinary content (Wellcome / PD /
+  Royal Collection / Met).
+
+**Scope discipline:** the research enumerates options + trade-offs +
+recommendations. It does **not** rewrite the codebase. Adoption decisions
+remain operator-gated.
+
 ## [Next Immediate Step]
 
 Part A (markdown harmonisation) and Part B (debug logging + balanced-
